@@ -5,3 +5,4 @@ __pycache__/
 vul4py/workspaces/
 vul4py/runs/
 *.log
+vul4py/
