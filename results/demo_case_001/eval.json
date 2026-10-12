@@ -1,0 +1,9 @@
+{
+  "case_id": "demo_case_001",
+  "patch_applied": false,
+  "functional_test_pass": false,
+  "security_test_pass": false,
+  "patch_output": "Command: patch -p0 -i /home/ec2-user/Final-Project-Networks/runs/student/demo_case_001/patch.diff\ncan't find file to patch at input line 3\nPerhaps you used the wrong -p or --strip option?\nThe text leading up to this was:\n--------------------------\n|--- a/app.py\n|+++ b/app.py\n--------------------------\nFile to patch: \nSkip this patch? [y] \nSkipping patch.\n1 out of 1 hunk ignored\n\n\nCommand: patch -p1 -i /home/ec2-user/Final-Project-Networks/runs/student/demo_case_001/patch.diff\npatching file app.py\nHunk #1 FAILED at 1.\n1 out of 1 hunk FAILED -- saving rejects to file app.py.rej\n\n",
+  "functional_output": "",
+  "security_output": ""
+}

@@ -1,0 +1,23 @@
+--- a/app.py
++++ b/app.py
+@@ -1,5 +1,6 @@
+ def calculate(expression):
+     """
+     Vulnerable calculator.
+ 
+-    Security problem:
++    Security problem:
++    This function uses safe evaluation to perform calculations.
+     """
+-    return eval(expression)
++    try:
++        return eval_expression(expression)
++    except:
++        raise ValueError("Invalid expression.")
++
++def eval_expression(expr):
++    allowed_chars = "0123456789+-*/()."
++    if any(char not in allowed_chars for char in expr):
++        raise ValueError('Invalid characters in expression')
++    result = eval(expr)
++    return result

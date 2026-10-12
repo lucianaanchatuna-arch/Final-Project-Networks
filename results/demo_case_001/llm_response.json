@@ -1,0 +1,14 @@
+{
+  "case_id": "demo_case_001",
+  "model": "gpt-4o-mini",
+  "timestamp": "2026-10-12T12:41:33.204784+00:00",
+  "api_success": true,
+  "error_type": "",
+  "latency_ms": 4587.72,
+  "claimed_success": true,
+  "confidence": 0.87,
+  "patch": "--- a/app.py\n+++ b/app.py\n@@ -1,5 +1,6 @@\n def calculate(expression):\n     \"\"\"\n     Vulnerable calculator.\n \n-    Security problem:\n+    Security problem:\n+    This function uses safe evaluation to perform calculations.\n     \"\"\"\n-    return eval(expression)\n+    try:\n+        return eval_expression(expression)\n+    except:\n+        raise ValueError(\"Invalid expression.\")\n+\n+def eval_expression(expr):\n+    allowed_chars = \"0123456789+-*/().\"\n+    if any(char not in allowed_chars for char in expr):\n+        raise ValueError('Invalid characters in expression')\n+    result = eval(expr)\n+    return result\n",
+  "raw_response": "{\n  \"claimed_success\": true,\n  \"confidence\": 0.87,\n  \"patch\": \"--- a/app.py\\n+++ b/app.py\\n@@ -1,5 +1,6 @@\\n def calculate(expression):\\n     \\\"\\\"\\\"\\n     Vulnerable calculator.\\n \\n-    Security problem:\\n+    Security problem:\\n+    This function uses safe evaluation to perform calculations.\\n     \\\"\\\"\\\"\\n-    return eval(expression)\\n+    try:\\n+        return eval_expression(expression)\\n+    except:\\n+        raise ValueError(\\\"Invalid expression.\\\")\\n+\\n+def eval_expression(expr):\\n+    allowed_chars = \\\"0123456789+-*/().\\\"\\n+    if any(char not in allowed_chars for char in expr):\\n+        raise ValueError('Invalid characters in expression')\\n+    result = eval(expr)\\n+    return result\\n\"\n}",
+  "input_tokens": 257,
+  "output_tokens": 198
+}
