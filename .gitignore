@@ -1,5 +1,9 @@
 venv/
+.venv/
 .env
+.env.local
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 .vscode/
@@ -8,3 +12,9 @@ __pycache__/
 
 vul4py/
 runs/
+!results/
+results/*
+!results/results.csv
+!results/summary.json
+!results/vul4py_runs/
+!results/vul4py_runs/**

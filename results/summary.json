@@ -1,0 +1,8 @@
+{
+  "cases_completed": 5,
+  "positive_claims": 5,
+  "verified_repairs": 1,
+  "false_assurances": 4,
+  "VRR": 0.2,
+  "FAR": 0.8
+}

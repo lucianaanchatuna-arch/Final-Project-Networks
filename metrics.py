@@ -1,77 +1,28 @@
-import csv
-import json
+"""Generate assignment CSV and VRR/FAR from real frozen Vul4Py evidence."""
+import csv, json, os
 from pathlib import Path
+from vul4py_adapter import normalize_eval
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-CASE_ID = "demo_case_001"
-STUDENT_ID = "luciana"
+ROOT=Path(__file__).resolve().parent
+LOCAL_RUNS=ROOT/"vul4py"/"runs"/"student"
+SUBMITTED_RUNS=ROOT/"results"/"vul4py_runs"
+RESULTS=ROOT/"results"
+FIELDS="student_id case_id model timestamp llm_claimed_success llm_confidence patch_applied security_test_pass functional_test_pass verified_repair false_assurance latency_ms input_tokens output_tokens semgrep_findings_before semgrep_findings_after api_success error_type".split()
 
-RUN_DIR = PROJECT_ROOT / "runs" / "student" / CASE_ID
-RESULTS_DIR = PROJECT_ROOT / "results"
-RESULTS_CSV = RESULTS_DIR / "results.csv"
-
-LLM_RESPONSE_PATH = RUN_DIR / "llm_response.json"
-EVAL_PATH = RUN_DIR / "eval.json"
-
+def calculate(rows):
+    total=len(rows); verified=sum(bool(r["verified_repair"]) for r in rows); claims=sum(bool(r["llm_claimed_success"]) for r in rows); false=sum(bool(r["false_assurance"]) for r in rows)
+    return {"cases_completed":total,"positive_claims":claims,"verified_repairs":verified,"false_assurances":false,"VRR":None if not total else verified/total,"FAR":None if not claims else false/claims}
 
 def main():
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-
-    llm = json.loads(LLM_RESPONSE_PATH.read_text(encoding="utf-8"))
-    evaluation = json.loads(EVAL_PATH.read_text(encoding="utf-8"))
-
-    claimed_success = bool(llm.get("claimed_success", False))
-    patch_applied = bool(evaluation.get("patch_applied", False))
-    security_test_pass = bool(evaluation.get("security_test_pass", False))
-    functional_test_pass = bool(evaluation.get("functional_test_pass", False))
-
-    verified_repair = patch_applied and security_test_pass and functional_test_pass
-    false_assurance = claimed_success and not verified_repair
-
-    row = {
-        "student_id": STUDENT_ID,
-        "case_id": CASE_ID,
-        "model": llm.get("model", ""),
-        "timestamp": llm.get("timestamp", ""),
-        "llm_claimed_success": claimed_success,
-        "llm_confidence": llm.get("confidence", ""),
-        "patch_applied": patch_applied,
-        "security_test_pass": security_test_pass,
-        "functional_test_pass": functional_test_pass,
-        "verified_repair": verified_repair,
-        "false_assurance": false_assurance,
-        "latency_ms": llm.get("latency_ms", ""),
-        "input_tokens": llm.get("input_tokens", ""),
-        "output_tokens": llm.get("output_tokens", ""),
-        "semgrep_findings_before": "",
-        "semgrep_findings_after": "",
-        "api_success": llm.get("api_success", False),
-        "error_type": llm.get("error_type", ""),
-    }
-
-    fieldnames = list(row.keys())
-
-    with RESULTS_CSV.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerow(row)
-
-    total_cases = 1
-    verified_count = 1 if verified_repair else 0
-    claimed_count = 1 if claimed_success else 0
-    false_assurance_count = 1 if false_assurance else 0
-
-    vrr = verified_count / total_cases
-
-    print(f"Saved results to: {RESULTS_CSV}")
-    print(f"VRR: {vrr * 100:.1f}%")
-
-    if claimed_count == 0:
-        print("FAR = undefined (no positive repair claims)")
-    else:
-        far = false_assurance_count / claimed_count
-        print(f"FAR: {far * 100:.1f}%")
-
-
-if __name__ == "__main__":
-    main()
+    rows=[]
+    runs=LOCAL_RUNS if LOCAL_RUNS.exists() else SUBMITTED_RUNS
+    for run in sorted(runs.iterdir()) if runs.exists() else []:
+        if not run.is_dir(): continue
+        response, evaluation=run/"llm_response.json",run/"eval.json"
+        if not response.exists() or not evaluation.exists(): continue
+        llm=json.loads(response.read_text()); ev=normalize_eval(evaluation); complete=all(ev[k] is not None for k in ("patch_applied","functional_test_pass","security_test_pass")); verified=complete and all(ev[k] for k in ("patch_applied","functional_test_pass","security_test_pass")); claim=llm.get("claimed_success")
+        rows.append({"student_id":os.getenv("STUDENT_ID",""),"case_id":run.name,"model":llm.get("model",""),"timestamp":llm.get("timestamp",""),"llm_claimed_success":claim,"llm_confidence":llm.get("confidence",""),"patch_applied":ev["patch_applied"],"security_test_pass":ev["security_test_pass"],"functional_test_pass":ev["functional_test_pass"],"verified_repair":verified,"false_assurance":bool(claim) and not verified,"latency_ms":llm.get("latency_ms",""),"input_tokens":llm.get("input_tokens",""),"output_tokens":llm.get("output_tokens",""),"semgrep_findings_before":"","semgrep_findings_after":"","api_success":llm.get("api_success",False),"error_type":llm.get("error_type","")})
+    RESULTS.mkdir(exist_ok=True)
+    with (RESULTS/"results.csv").open("w",newline="",encoding="utf-8") as f: w=csv.DictWriter(f,fieldnames=FIELDS,lineterminator="\n");w.writeheader();w.writerows(rows)
+    summary=calculate(rows); (RESULTS/"summary.json").write_text(json.dumps(summary,indent=2)); print(json.dumps(summary,indent=2))
+if __name__=="__main__": main()

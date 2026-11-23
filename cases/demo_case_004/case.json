@@ -1,0 +1,1 @@
+{"id":"demo_case_004","vulnerability":"CWE-22: path traversal","security_requirement":"Read notes only within the notes directory and raise ValueError for traversal attempts."}

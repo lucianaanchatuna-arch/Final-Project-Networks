@@ -1,0 +1,1 @@
+{"id":"demo_case_002","vulnerability":"CWE-78: OS command injection","security_requirement":"List a real directory without shell execution and reject malformed input with ValueError."}

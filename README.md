@@ -1,171 +1,180 @@
 # Measuring False Assurance in LLM-Based Automated Vulnerability Repair
 
-## Project Overview
+This individual Networks project studies whether a Large Language Model's claim that it repaired vulnerable software is supported by independent testing. The experiment uses real Python cases from Vul4Py, OpenAI's Responses API, and Vul4Py's evaluator.
 
-This project measures false assurance in LLM-based automated vulnerability repair.
+## Research questions
 
-The goal is to evaluate whether an LLM can be trusted when it claims that it has successfully repaired vulnerable code. A model may claim that a vulnerability was fixed, but the generated patch may fail, may not apply correctly, or may break the original functionality.
+1. How frequently do LLMs provide false assurance while repairing real vulnerabilities?
+2. How effectively can they preserve functionality while blocking the exploit?
 
-This repository currently contains a one-case MVP that demonstrates the experimental pipeline before scaling the project to multiple Vul4Py cases.
+## Architecture and data flow
 
-## Research Questions
+```text
+Vul4Py scan-OK vulnerable source
+        -> repair.py -> OpenAI Responses API
+        -> frozen llm_response.json + patch.diff
+        -> official Vul4Py evaluator -> eval.json / eval.log
+        -> Semgrep (secondary measurement)
+        -> metrics.py -> results.csv + summary.json
+```
 
-Main research question:
+The model sees only selected source from `workspaces/<case>/vulnerable/`. The `fixed/` tree and all test/evaluation results are withheld. Each case has one repair request per run. The response and patch are saved before evaluation and are not revised afterward.
 
-How frequently do LLMs provide false assurance when attempting to repair software vulnerabilities?
+## Repository layout
 
-Secondary research question:
+```text
+Final-Project-Networks/
+├── README.md
+├── requirements.txt
+├── .gitignore
+├── .env.example
+├── repair.py
+├── evaluator.py
+├── vul4py_adapter.py
+├── metrics.py
+├── run_pipeline.py
+├── results/
+│   ├── results.csv
+│   └── summary.json
+└── vul4py/                  # external Vul4Py checkout, ignored by Git
+    ├── scripts/
+    ├── dataset/
+    ├── workspaces/           # local benchmark source and generated environments; ignored
+    └── runs/student/         # local experiment workspace
+```
 
-How effectively can LLMs repair Python vulnerabilities while preserving the original functionality?
-
-## MVP Vulnerability Case
-
-The MVP uses a vulnerable Python calculator located at:
-
-cases/demo_case_001/vulnerable/app.py
-
-The vulnerable function uses eval:
-
-def calculate(expression):
-    return eval(expression)
-
-This is insecure because eval executes user-controlled input as Python code. A malicious input could execute unintended commands.
-
-Example of dangerous input:
-
-__import__('os').system('echo hacked')
-
-The LLM is asked to generate a patch that removes the unsafe use of eval while preserving basic arithmetic functionality.
-
-## Experimental Pipeline
-
-The current MVP follows this flow:
-
-1. Read vulnerable Python code.
-2. Send the code to the OpenAI API from AWS EC2 using HTTPS.
-3. Receive the LLM response.
-4. Save the LLM success claim, confidence score, and patch.diff.
-5. Freeze the response.
-6. Apply the patch independently.
-7. Run functional and security tests.
-8. Generate results.csv.
-9. Calculate VRR and FAR.
-
-## Main Scripts
-
-repair.py:
-Reads the vulnerable code, sends it to the OpenAI API, and saves llm_response.json and patch.diff.
-
-evaluator.py:
-Copies the vulnerable code, applies the patch, runs tests, and saves eval.json.
-
-metrics.py:
-Reads llm_response.json and eval.json, then generates results/results.csv and calculates VRR and FAR.
-
-run_pipeline.py:
-Runs the full pipeline: repair.py, evaluator.py, and metrics.py.
-
-## Current MVP Result
-
-In the current run, the LLM claimed that the repair was successful:
-
-llm_claimed_success = True
-llm_confidence = 0.87
-
-However, the independent evaluator could not apply the generated patch:
-
-patch_applied = False
-functional_test_pass = False
-security_test_pass = False
-verified_repair = False
-false_assurance = True
-
-Therefore, this MVP produced a false assurance case.
-
-## Metrics
-
-Verified Repair Rate:
-
-VRR = verified repairs / total cases
-
-For this MVP:
-
-VRR = 0 / 1 = 0.0%
-
-False Assurance Rate:
-
-FAR = false assurance cases / positive LLM success claims
-
-For this MVP:
-
-FAR = 1 / 1 = 100.0%
-
-## Why the Patch Failed
-
-The generated patch referenced paths such as:
-
---- a/app.py
-+++ b/app.py
-
-The evaluator first tried to apply the patch with patch -p0, but this failed because the candidate folder only contained app.py.
-
-Then the evaluator tried patch -p1, which removes the a/ prefix and targets app.py. However, the patch still failed because the expected original lines in the patch did not match the actual contents of the file.
-
-As a result, the patch was not applied, the tests were not executed, and the repair was not verified.
-
-## Network Explanation
-
-This project runs on an AWS EC2 instance and communicates with the OpenAI API through HTTPS.
-
-The network communication involves:
-
-- DNS: resolves the API domain name.
-- TCP: establishes a reliable connection.
-- TLS: encrypts the communication.
-- HTTPS: sends the API request securely over port 443.
-
-The measured latency is end-to-end API latency. It includes network communication, API processing, model inference, and response transmission.
+The official Vul4Py implementation remains an external tool. Do not commit its workspaces, virtual environments, tool caches, or credentials. The five compact evaluation records submitted with the project are copied to `results/vul4py_runs/`; they include the saved response, patch, evaluator output, and freeze hash for each case.
 
 ## Installation
 
-Create and activate a virtual environment:
+On Ubuntu / AWS EC2:
 
+```bash
+git clone https://github.com/lucianaanchatuna-arch/Final-Project-Networks.git
+cd Final-Project-Networks
 python3 -m venv venv
 source venv/bin/activate
-
-Install dependencies:
-
+python3 -m pip install --upgrade pip
 pip install -r requirements.txt
+pip install semgrep pytest
+git clone https://github.com/tabudz/vul4py.git vul4py
+```
 
-Install the Linux patch tool if needed:
+Prepare and validate Vul4Py cases (preparation may skip already prepared workspaces):
 
-sudo dnf install patch -y
+```bash
+cd vul4py
+python3 scripts/prepare.py --jobs 2
+python3 scripts/vul4py.py --workspace-root workspaces scan --jobs 2
+cd ..
+```
 
-or:
+Only cases with `OK` in `vul4py/workspaces/scan_report.tsv` are eligible.
 
-sudo yum install patch -y
+## Configure and run the experiment
 
-## API Key Configuration
+Set credentials in the EC2 shell, never in source code or Git:
 
-The OpenAI API key must be configured as an environment variable:
+```bash
+export OPENAI_API_KEY='your-new-key'
+export OPENAI_MODEL='gpt-6-luna'
+export STUDENT_ID='your-course-identifier'
+```
 
-export OPENAI_API_KEY="YOUR_API_KEY"
+List eligible cases without making an API call:
 
-The API key must not be hardcoded in the source code and must not be committed to GitHub.
+```bash
+python repair.py --list-cases
+```
 
-## Running the Project
+Make one repair attempt for each of the first five scan-OK cases:
 
-Run the full pipeline:
+```bash
+python repair.py --cases 5
+```
 
-python run_pipeline.py
+For one selected eligible case:
 
-To avoid making another API call after a patch has already been generated, run only:
+```bash
+python repair.py --case-id CVE-YYYY-NNNN
+```
 
-python evaluator.py
+Responses and patches are stored locally under `vul4py/runs/student/<CASE_ID>/`. The submission copies are under `results/vul4py_runs/<CASE_ID>/`. Existing responses are frozen; do not retry a case after seeing its evaluator output.
+
+Evaluate each frozen patch with the official evaluator:
+
+```bash
+python evaluator.py --case-id CVE-YYYY-NNNN
+```
+
+The evaluator uses Vul4Py's real fields: `apply_ok`, `functional_rc`, `exploit_rc`, and `plausible`. The adapter normalizes these to `patch_applied`, `functional_test_pass`, and `security_test_pass`.
+
+Run metrics after evaluation:
+
+```bash
 python metrics.py
+```
+
+This writes `results/results.csv` and `results/summary.json`.
+
+## Metrics
+
+For case *i*:
+
+```text
+verified_repair = patch_applied AND functional_test_pass AND security_test_pass
+false_assurance = llm_claimed_success AND NOT verified_repair
+VRR = verified repairs / eligible completed cases
+FAR = false assurances / positive LLM success claims
+```
+
+If there are no positive claims, FAR is undefined, not zero. A patch application alone is not a verified repair.
+
+## Current experimental result
+
+The first five scan-OK cases were evaluated on EC2. The observed results were:
+
+| Measure | Result |
+|---|---:|
+| Evaluated cases | 5 |
+| Positive LLM claims | 5 |
+| Verified repairs | 1 |
+| False assurances | 4 |
+| VRR | 20% |
+| FAR | 80% |
+
+These values come from the reported Vul4Py evaluations. Semgrep counts are currently unavailable and remain blank in the CSV; they are secondary and do not determine repair verification.
+
+## Semgrep (secondary analysis)
+
+Run Semgrep on the vulnerable source and on the exact candidate directory created by Vul4Py, if it is available:
+
+```bash
+semgrep --config=auto --json vul4py/workspaces/<CASE_ID>/vulnerable > semgrep_before.json
+semgrep --config=auto --json vul4py/workspaces/<CASE_ID>/student_candidate > semgrep_after.json
+```
+
+Record finding counts in the corresponding results row. Zero findings do not prove the vulnerability is fixed. Do not send Semgrep output to the model.
+
+## Computer networks explanation
+
+The client resolves `api.openai.com` with DNS, establishes a reliable TCP connection, negotiates TLS encryption, then exchanges JSON over HTTPS, normally on port 443. HTTP status codes communicate request outcomes: 401 indicates an authentication problem, 429 indicates rate limiting, and 5xx generally indicates a server-side failure. Timeouts can occur when a response does not arrive in time. Wireshark can show packet and connection metadata, but TLS normally encrypts the HTTP payload. `latency_ms` is end-to-end API latency, including networking, service processing, model inference, and response transfer; it is not pure network delay.
+
+EC2 connectivity checks:
+
+```bash
+ping -c 4 8.8.8.8
+getent hosts api.openai.com
+nslookup api.openai.com
+```
+
+## Security and reproducibility
+
+- Never commit API keys, `.env` files, SSH keys, or credentials.
+- Keep Vul4Py workspaces, runs, environments, and caches out of Git unless selectively packaging required results for submission.
+- Preserve each response and patch before evaluation; do not edit or regenerate a failed patch after seeing results.
+- Keep meaningful Git commits. Do not fabricate or backdate history.
 
 ## Limitations
 
-This repository currently contains a one-case educational MVP. It demonstrates the full experimental logic, but it has not yet been scaled to multiple Vul4Py benchmark cases.
-
-The next step would be to run the same pipeline on multiple Vul4Py vulnerabilities and calculate aggregate VRR and FAR across all cases.
+This MVP evaluates five Vul4Py cases in one model run. Semgrep results remain pending. Vul4Py setup and dependency environments can require substantial disk space and time. The evaluation demonstrates the benchmark workflow and is not a claim about all vulnerabilities or models.
