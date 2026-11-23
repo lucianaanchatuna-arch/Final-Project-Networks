@@ -35,7 +35,13 @@ Final-Project-Networks/
 ├── run_pipeline.py
 ├── results/
 │   ├── results.csv
-│   └── summary.json
+│   ├── summary.json
+│   └── vul4py_runs/
+│       ├── CVE-2021-32839/
+│       ├── CVE-2022-3102/
+│       ├── CVE-2023-30608/
+│       ├── CVE-2023-47163/
+│       └── CVE-2023-6681/
 └── vul4py/                  # external Vul4Py checkout, ignored by Git
     ├── scripts/
     ├── dataset/
@@ -116,6 +122,30 @@ python metrics.py
 ```
 
 This writes `results/results.csv` and `results/summary.json`.
+
+## Published results format
+
+`results/results.csv` has one row per evaluated case. Its columns are:
+
+```csv
+student_id,case_id,model,timestamp,llm_claimed_success,llm_confidence,patch_applied,security_test_pass,functional_test_pass,verified_repair,false_assurance,latency_ms,input_tokens,output_tokens,semgrep_findings_before,semgrep_findings_after,api_success,error_type
+luciana,CVE-2021-32839,gpt-6-luna,2026-11-22T20:44:30.449727+00:00,True,0.97,True,True,True,True,False,9723.49,1306,922,,,True,
+```
+
+`results/summary.json` contains the aggregate metrics computed from those case rows:
+
+```json
+{
+  "cases_completed": 5,
+  "positive_claims": 5,
+  "verified_repairs": 1,
+  "false_assurances": 4,
+  "VRR": 0.2,
+  "FAR": 0.8
+}
+```
+
+Each directory under `results/vul4py_runs/<CASE_ID>/` contains the saved model response, generated patch, Vul4Py evaluation output, normalized evaluation, logs, and freeze hash for that case.
 
 ## Metrics
 
